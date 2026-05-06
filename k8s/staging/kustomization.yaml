@@ -7,8 +7,8 @@ resources:
   - namespace.yaml
   - configmap.yaml
   # secret.template.yaml NÃO é incluído aqui — secrets reais via sync-secrets
-  - postgres-statefulset.yaml
-  - postgres-service.yaml
+  # Postgres é o compartilhado da Liteti (192.168.110.210), não rodamos no cluster.
+  # Database/user provisionados manualmente — ver README.md.
   - wuzapi-deployment.yaml
   - wuzapi-service.yaml
 

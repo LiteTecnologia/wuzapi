@@ -14,22 +14,26 @@ namespace: wuzapi-staging
   │  • image: ghcr.io/.../wuzapi    │
   │  • port 8080 (ClusterIP only)   │
   └─────────────┬───────────────────┘
-                │ DB_HOST=wuzapi-postgres
+                │ DB_HOST=192.168.110.210
                 ▼
   ┌─────────────────────────────────┐
-  │ wuzapi-postgres                 │
-  │  (StatefulSet, postgres:16,     │
-  │   PVC 10Gi)                     │
+  │ Postgres compartilhado Liteti   │
+  │ (fora do cluster, gerenciado    │
+  │  separadamente)                 │
+  │  • database: wuzapi             │
+  │  • user:     wuzapi             │
   └─────────────────────────────────┘
 ```
 
 **Sem ingress.** Acesso interno via `wuzapi.wuzapi-staging.svc.cluster.local:8080`. Para admin (criar instâncias, escanear QR), usar `kubectl port-forward`.
 
+**Postgres externo:** decidimos NÃO rodar postgres no cluster. Reaproveitamos a instância staging compartilhada da Liteti em `192.168.110.210:5432`. Vantagens: backup centralizado, menos consumo de Longhorn, banco sobrevive a `kubectl delete namespace`.
+
 ## Pré-requisitos
 
 - RKE2 com kubeconfig em `~/.kube/rke2-liteti.yaml`
-- StorageClass default disponível (ou ajustar `volumeClaimTemplates.storageClassName` no `postgres-statefulset.yaml`)
-- Imagem do wuzapi publicada em `ghcr.io/litetecnologia/wuzapi` (build via GitHub Action — TODO)
+- Acesso de rede do cluster ao postgres compartilhado (`192.168.110.210:5432`)
+- Imagem do wuzapi publicada em `ghcr.io/litetecnologia/wuzapi` (via workflow `liteti-build-image.yml`)
 
 ## Provisionar
 
@@ -41,7 +45,26 @@ pass insert -e liteti/services/faldesk-staging/wuzapi-encryption-key <<< "$(open
 pass insert -e liteti/services/faldesk-staging/wuzapi-postgres-password <<< "$(openssl rand -hex 24)"
 ```
 
-### 2. Criar namespace e secret antes do kustomize
+### 2. Provisionar database e user no postgres compartilhado
+
+Executar **uma única vez**, da rede `192.168.110.x` ou via SSH ao host compartilhado:
+
+```bash
+WUZAPI_PASS=$(pass show liteti/services/faldesk-staging/wuzapi-postgres-password)
+
+PGPASSWORD=$(pass show liteti/postgres-admin-password) \
+  psql -h 192.168.110.210 -U postgres <<SQL
+CREATE DATABASE wuzapi;
+CREATE USER wuzapi WITH ENCRYPTED PASSWORD '$WUZAPI_PASS';
+GRANT ALL PRIVILEGES ON DATABASE wuzapi TO wuzapi;
+\c wuzapi
+GRANT ALL ON SCHEMA public TO wuzapi;
+SQL
+```
+
+> wuzapi cria as tabelas próprias (whatsmeow sqlstore + tabelas locais) na primeira conexão. Não precisa rodar migrations manualmente.
+
+### 3. Criar namespace e secret
 
 ```bash
 export KUBECONFIG=~/.kube/rke2-liteti.yaml
@@ -55,19 +78,22 @@ kubectl -n wuzapi-staging create secret generic wuzapi-secrets \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-### 3. Aplicar manifests
+### 4. Aplicar manifests
 
 ```bash
 kubectl apply -k k8s/staging
 ```
 
-### 4. Verificar pods
+### 5. Verificar pods
 
 ```bash
 kubectl -n wuzapi-staging get pods -w
-# wuzapi-postgres-0    1/1  Running
 # wuzapi-xxxxx-xxxxx   1/1  Running
 ```
+
+Se o pod ficar em `Init:0/1`, é o init container `wait-for-postgres` esperando o postgres ficar acessível. Verifique:
+- `kubectl -n wuzapi-staging logs <pod> -c wait-for-postgres`
+- Conectividade do cluster ao `192.168.110.210:5432` (firewall, NetworkPolicies)
 
 ## Smoke test
 
@@ -121,6 +147,10 @@ kubectl -n wuzapi-staging set image deployment/wuzapi wuzapi=ghcr.io/litetecnolo
 ## Limpar tudo (se precisar reiniciar do zero)
 
 ```bash
+# Cluster — não toca no postgres compartilhado
 kubectl delete namespace wuzapi-staging
-# WAIT: isso apaga o PVC do postgres → todas as sessões WhatsApp são perdidas
+
+# Postgres — para reset completo das sessões WhatsApp
+PGPASSWORD=$(pass show liteti/postgres-admin-password) \
+  psql -h 192.168.110.210 -U postgres -c "DROP DATABASE wuzapi; CREATE DATABASE wuzapi; GRANT ALL PRIVILEGES ON DATABASE wuzapi TO wuzapi;"
 ```

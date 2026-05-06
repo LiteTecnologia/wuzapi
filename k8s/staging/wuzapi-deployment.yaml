@@ -17,18 +17,25 @@ spec:
       labels:
         app: wuzapi
     spec:
-      # Espera o postgres ficar pronto antes de subir
+      # Sanity check: o postgres compartilhado (192.168.110.210) está alcançável?
+      # Falha rápido se houver problema de rede/firewall em vez de crashloop misterioso do wuzapi.
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine
+          envFrom:
+            - configMapRef:
+                name: wuzapi-config
           command:
             - sh
             - -c
             - |
-              until pg_isready -h wuzapi-postgres -p 5432 -U wuzapi; do
-                echo "Aguardando postgres..."
+              for i in $(seq 1 30); do
+                pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" && exit 0
+                echo "Aguardando postgres em $DB_HOST:$DB_PORT (tentativa $i/30)..."
                 sleep 2
               done
+              echo "Postgres compartilhado inalcançável após 60s"
+              exit 1
       containers:
         - name: wuzapi
           image: ghcr.io/litetecnologia/wuzapi:latest

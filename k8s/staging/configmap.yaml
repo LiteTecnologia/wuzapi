@@ -9,8 +9,9 @@ data:
   WUZAPI_ADDRESS: "0.0.0.0"
   TZ: "America/Sao_Paulo"
 
-  # Postgres (host = service name no mesmo namespace)
-  DB_HOST: "wuzapi-postgres"
+  # Postgres compartilhado da Liteti (192.168.110.210)
+  # Database `wuzapi` e user `wuzapi` provisionados manualmente — ver README.md.
+  DB_HOST: "192.168.110.210"
   DB_PORT: "5432"
   DB_USER: "wuzapi"
   DB_NAME: "wuzapi"
