@@ -17,6 +17,14 @@ spec:
       labels:
         app: wuzapi
     spec:
+      # Pod Security Standards "restricted" — RKE2 enforce no nível mais alto.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       # Sanity check: o postgres compartilhado (192.168.110.210) está alcançável?
       # Falha rápido se houver problema de rede/firewall em vez de crashloop misterioso do wuzapi.
       initContainers:
@@ -36,9 +44,13 @@ spec:
               done
               echo "Postgres compartilhado inalcançável após 60s"
               exit 1
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
       containers:
         - name: wuzapi
-          image: ghcr.io/litetecnologia/wuzapi:latest
+          image: ghcr.io/litetecnologia/wuzapi:liteti-staging
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -48,6 +60,10 @@ spec:
                 name: wuzapi-config
             - secretRef:
                 name: wuzapi-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           resources:
             requests:
               cpu: 100m

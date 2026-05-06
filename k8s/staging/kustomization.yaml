@@ -12,6 +12,8 @@ resources:
   - wuzapi-deployment.yaml
   - wuzapi-service.yaml
 
-commonLabels:
-  app.kubernetes.io/managed-by: liteti
-  environment: staging
+labels:
+  - includeSelectors: false
+    pairs:
+      app.kubernetes.io/managed-by: liteti
+      environment: staging
