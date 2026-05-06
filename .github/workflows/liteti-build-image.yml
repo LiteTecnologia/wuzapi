@@ -1,7 +1,7 @@
-# Build & push wuzapi image for Liteti staging.
+# Build & push wuzapi image to Liteti's Google Artifact Registry.
 #
 # Aciona em qualquer push pra uma branch `liteti/**` (overlay Liteti) ou via dispatch manual.
-# Publica em GHCR sob o org dono do fork (LiteTecnologia).
+# Autentica via WIF (sem service account key estática).
 #
 # Tags geradas:
 #   - liteti-staging       (rolling, sempre o último build)
@@ -20,14 +20,19 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  id-token: write   # required for WIF
 
 concurrency:
   group: liteti-build-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/litetecnologia/wuzapi
+  GCP_PROJECT: nexodin-liteti
+  GCP_REGION: southamerica-east1
+  GAR_REPO: liteti
+  IMAGE_NAME: wuzapi
+  GCP_WIF_PROVIDER: projects/277985200423/locations/global/workloadIdentityPools/github-actions/providers/github-oidc
+  GCP_WIF_SA: github-cicd@nexodin-liteti.iam.gserviceaccount.com
 
 jobs:
   build:
@@ -39,18 +44,23 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
+      - name: Authenticate to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_WIF_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure docker for GAR
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT }}/${{ env.GAR_REPO }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=liteti-staging
             type=sha,prefix=liteti-,format=short
