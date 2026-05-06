@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wuzapi
+  namespace: wuzapi-staging
+  labels:
+    app: wuzapi
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # 1 réplica + sessões persistidas no postgres — RollingUpdate causaria reconexões
+  selector:
+    matchLabels:
+      app: wuzapi
+  template:
+    metadata:
+      labels:
+        app: wuzapi
+    spec:
+      # Espera o postgres ficar pronto antes de subir
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h wuzapi-postgres -p 5432 -U wuzapi; do
+                echo "Aguardando postgres..."
+                sleep 2
+              done
+      containers:
+        - name: wuzapi
+          image: ghcr.io/litetecnologia/wuzapi:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: wuzapi-config
+            - secretRef:
+                name: wuzapi-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+      restartPolicy: Always

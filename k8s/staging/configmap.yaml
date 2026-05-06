@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wuzapi-config
+  namespace: wuzapi-staging
+data:
+  # Connection
+  WUZAPI_PORT: "8080"
+  WUZAPI_ADDRESS: "0.0.0.0"
+  TZ: "America/Sao_Paulo"
+
+  # Postgres (host = service name no mesmo namespace)
+  DB_HOST: "wuzapi-postgres"
+  DB_PORT: "5432"
+  DB_USER: "wuzapi"
+  DB_NAME: "wuzapi"
+
+  # WhatsApp session
+  SESSION_DEVICE_NAME: "WuzAPI Liteti Staging"
+
+  # Webhook
+  WEBHOOK_FORMAT: "json"
+  WEBHOOK_RETRY_ENABLED: "true"
+  WEBHOOK_RETRY_COUNT: "3"
+  WEBHOOK_RETRY_DELAY_SECONDS: "5"
+
+  # Logging
+  WUZAPI_LOG_LEVEL: "info"
