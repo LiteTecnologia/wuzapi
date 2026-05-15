@@ -122,28 +122,19 @@ func (m *S3Manager) InitializeS3Client(userID string, config *S3Config) error {
 		Credentials: credProvider,
 	}
 
-	if config.Endpoint != "" {
-		customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-			if service == s3.ServiceID {
-				return aws.Endpoint{
-					URL:               config.Endpoint,
-					HostnameImmutable: config.PathStyle,
-				}, nil
-			}
-			return aws.Endpoint{}, &aws.EndpointNotFoundError{}
-		})
-		cfg.EndpointResolverWithOptions = customResolver
-	}
-
-	// Create S3 client.
+	// Create S3 client using modern BaseEndpoint instead of the deprecated
+	// EndpointResolverWithOptions. The deprecated resolver paired with
+	// UsePathStyle produced URI canonicalization that broke SigV4 against
+	// GCS S3-interop (SignatureDoesNotMatch even on read ops).
 	//
 	// RequestChecksumCalculation/ResponseChecksumValidation are forced to
-	// `when_required`. The AWS SDK Go v2 default switched to `when_supported`
-	// in early 2025, which makes PutObject emit `x-amz-sdk-checksum-algorithm`
-	// + a CRC32 trailer. GCS S3 XML interop does not accept those headers as
-	// signed input and returns SignatureDoesNotMatch on uploads. The change
-	// is a no-op for AWS S3 and compatible providers (MinIO, R2, B2).
+	// `when_required` because aws-sdk-go-v2 changed the default to
+	// `when_supported` in early 2025, emitting an x-amz-sdk-checksum-algorithm
+	// trailer that GCS XML API rejects as an unsigned input on uploads.
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		if config.Endpoint != "" {
+			o.BaseEndpoint = aws.String(config.Endpoint)
+		}
 		o.UsePathStyle = config.PathStyle
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
