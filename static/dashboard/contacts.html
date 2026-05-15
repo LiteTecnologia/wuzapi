@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WuzAPI — Contacts</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.css">
+  <style>
+    body { padding: 20px; max-width: 1100px; margin: 0 auto; }
+    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .toolbar input { flex: 1; }
+    .empty { padding: 40px; text-align: center; color: #888; }
+    table.contacts td { vertical-align: middle; font-size: 13px; }
+    .jid { font-family: monospace; color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<h2 class="ui header">
+  <i class="address book icon"></i>
+  <div class="content">
+    Contacts
+    <div class="sub header" id="subHeader">User token required.</div>
+  </div>
+</h2>
+
+<div class="ui modal" id="loginModal">
+  <div class="header"><i class="lock icon"></i> Authentication Required</div>
+  <div class="content">
+    <div class="ui form">
+      <div class="field">
+        <label>User token</label>
+        <input type="password" id="tokenInput" placeholder="Enter the per-user token (not the admin token)">
+      </div>
+    </div>
+  </div>
+  <div class="actions">
+    <a class="ui cancel button" href="./">Back to dashboard</a>
+    <button class="ui primary button" id="loginBtn">Load</button>
+  </div>
+</div>
+
+<div id="container" style="display:none;">
+  <div class="toolbar">
+    <div class="ui icon input">
+      <input type="text" id="filterInput" placeholder="Filter by name, push name or JID...">
+      <i class="search icon"></i>
+    </div>
+    <button class="ui icon button" id="reloadBtn" title="Reload"><i class="sync icon"></i></button>
+    <a class="ui icon button" href="./" title="Back to dashboard"><i class="arrow left icon"></i></a>
+    <span id="count" style="color:#666;font-size:13px;"></span>
+  </div>
+  <table class="ui compact selectable striped table contacts" id="contactsTable">
+    <thead>
+      <tr><th>Name</th><th>Push name</th><th>Business</th><th>JID</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <div class="empty" id="empty" style="display:none;">No contacts to show.</div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
+<script>
+let token = '';
+let allRows = [];
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function render(rows) {
+  const $body = $('#contactsTable tbody').empty();
+  if (!rows.length) {
+    $('#empty').show();
+    $('#count').text('0 contacts');
+    return;
+  }
+  $('#empty').hide();
+  $('#count').text(rows.length + ' contacts');
+  rows.forEach(r => {
+    $body.append(`<tr>
+      <td>${escapeHtml(r.full_name || r.first_name || '—')}</td>
+      <td>${escapeHtml(r.push_name || '')}</td>
+      <td>${escapeHtml(r.business_name || '')}</td>
+      <td class="jid">${escapeHtml(r.jid)}</td>
+    </tr>`);
+  });
+}
+
+function applyFilter() {
+  const q = ($('#filterInput').val() || '').toLowerCase().trim();
+  if (!q) return render(allRows);
+  render(allRows.filter(r =>
+    (r.full_name || '').toLowerCase().includes(q) ||
+    (r.first_name || '').toLowerCase().includes(q) ||
+    (r.push_name || '').toLowerCase().includes(q) ||
+    (r.business_name || '').toLowerCase().includes(q) ||
+    (r.jid || '').toLowerCase().includes(q)
+  ));
+}
+
+async function load() {
+  $('#container').show();
+  $('#subHeader').text('Loading contacts...');
+  try {
+    const res = await fetch('/user/contacts', { headers: { token } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    const raw = j.data || j;
+    allRows = Object.entries(raw).map(([jid, c]) => ({ jid, ...c })).sort((a, b) =>
+      (a.full_name || a.push_name || a.jid).localeCompare(b.full_name || b.push_name || b.jid)
+    );
+    $('#subHeader').text('Source: whatsmeow_contacts (per-user)');
+    render(allRows);
+  } catch (e) {
+    $('#subHeader').text('Failed: ' + e.message);
+    $('#container').hide();
+    $('#loginModal').modal('show');
+  }
+}
+
+$(function () {
+  const urlToken = new URLSearchParams(location.search).get('token');
+  if (urlToken) { token = urlToken; load(); }
+  else $('#loginModal').modal({ closable: false }).modal('show');
+
+  $('#loginBtn').click(function () {
+    const t = $('#tokenInput').val().trim();
+    if (!t) return;
+    token = t;
+    $('#loginModal').modal('hide');
+    load();
+  });
+  $('#tokenInput').keypress(e => { if (e.which === 13) $('#loginBtn').click(); });
+  $('#filterInput').on('input', applyFilter);
+  $('#reloadBtn').click(load);
+});
+</script>
+</body>
+</html>

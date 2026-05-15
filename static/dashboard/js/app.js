@@ -1299,6 +1299,9 @@ function populateInstances(instances) {
               <button class="ui primary positive button dashboard-button ${instance.connected === true ? 'hidden' : ''}" id="button-connect-${instance.id}" onclick="connect('${instance.token}')">Connect</button>
               <button class="ui primary negative button dashboard-button ${instance.connected === true ? '' : 'hidden'}" id="button-logout-${instance.id}" onclick="logout('${instance.token}')">Logout</button>
               <button class="ui primary positive button dashboard-button ${instance.connected === true && instance.loggedIn === false ? '' : 'hidden'} id="button-logout-${instance.id}" onclick="modalPairPhone()">Login with Pairing Code</button>
+              <a class="ui blue button dashboard-button ${instance.loggedIn === true ? '' : 'hidden'}" href="history.html?token=${encodeURIComponent(instance.token)}" target="_blank" title="Browse stored message history"><i class="history icon"></i>History</a>
+              <a class="ui teal button dashboard-button ${instance.loggedIn === true ? '' : 'hidden'}" href="contacts.html?token=${encodeURIComponent(instance.token)}" target="_blank" title="List synced WhatsApp contacts"><i class="address book icon"></i>Contacts</a>
+              <a class="ui green button dashboard-button ${instance.loggedIn === true ? '' : 'hidden'}" href="groups.html?token=${encodeURIComponent(instance.token)}" target="_blank" title="List WhatsApp groups"><i class="users icon"></i>Groups</a>
               </div>
         </div>
         `;

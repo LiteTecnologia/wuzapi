@@ -382,13 +382,20 @@ $(document).ready(function() {
     return false; // Prevent modal from closing immediately
   }
   
-  // Show login modal
-  $('#loginModal').modal({
-    closable: false,
-    onApprove: function() {
-      return performLogin();
-    }
-  }).modal('show');
+  // Auto-login via ?token=... URL param (used by dashboard quick-links)
+  const urlToken = new URLSearchParams(location.search).get('token');
+  if (urlToken) {
+    $('#tokenInput').val(urlToken);
+    currentToken = urlToken;
+    loadInstances();
+  } else {
+    $('#loginModal').modal({
+      closable: false,
+      onApprove: function() {
+        return performLogin();
+      }
+    }).modal('show');
+  }
   
   // Handle login button click
   $('#loginBtn').click(function(e) {

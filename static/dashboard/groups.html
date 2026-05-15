@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WuzAPI — Groups</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.css">
+  <style>
+    body { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .toolbar input { flex: 1; }
+    .empty { padding: 40px; text-align: center; color: #888; }
+    table.groups td { vertical-align: middle; font-size: 13px; }
+    .jid { font-family: monospace; color: #666; font-size: 12px; }
+    .topic { color: #555; max-width: 420px; }
+  </style>
+</head>
+<body>
+
+<h2 class="ui header">
+  <i class="users icon"></i>
+  <div class="content">
+    Groups
+    <div class="sub header" id="subHeader">User token required.</div>
+  </div>
+</h2>
+
+<div class="ui modal" id="loginModal">
+  <div class="header"><i class="lock icon"></i> Authentication Required</div>
+  <div class="content">
+    <div class="ui form">
+      <div class="field">
+        <label>User token</label>
+        <input type="password" id="tokenInput" placeholder="Enter the per-user token (not the admin token)">
+      </div>
+    </div>
+  </div>
+  <div class="actions">
+    <a class="ui cancel button" href="./">Back to dashboard</a>
+    <button class="ui primary button" id="loginBtn">Load</button>
+  </div>
+</div>
+
+<div id="container" style="display:none;">
+  <div class="toolbar">
+    <div class="ui icon input">
+      <input type="text" id="filterInput" placeholder="Filter by name, topic or JID...">
+      <i class="search icon"></i>
+    </div>
+    <button class="ui icon button" id="reloadBtn" title="Reload"><i class="sync icon"></i></button>
+    <a class="ui icon button" href="./" title="Back to dashboard"><i class="arrow left icon"></i></a>
+    <span id="count" style="color:#666;font-size:13px;"></span>
+  </div>
+  <table class="ui compact selectable striped table groups" id="groupsTable">
+    <thead>
+      <tr><th>Name</th><th>Topic</th><th>Members</th><th>Created</th><th>JID</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <div class="empty" id="empty" style="display:none;">No groups to show.</div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.4/dist/semantic.min.js"></script>
+<script>
+let token = '';
+let allRows = [];
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function fmtDate(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+}
+
+function render(rows) {
+  const $body = $('#groupsTable tbody').empty();
+  if (!rows.length) {
+    $('#empty').show();
+    $('#count').text('0 groups');
+    return;
+  }
+  $('#empty').hide();
+  $('#count').text(rows.length + ' groups');
+  rows.forEach(g => {
+    $body.append(`<tr>
+      <td><strong>${escapeHtml(g.Name || g.name || '—')}</strong></td>
+      <td class="topic">${escapeHtml(g.Topic || g.topic || '')}</td>
+      <td>${(g.Participants || g.participants || []).length}</td>
+      <td>${fmtDate(g.GroupCreated || g.created || '')}</td>
+      <td class="jid">${escapeHtml(g.JID || g.jid)}</td>
+    </tr>`);
+  });
+}
+
+function applyFilter() {
+  const q = ($('#filterInput').val() || '').toLowerCase().trim();
+  if (!q) return render(allRows);
+  render(allRows.filter(g => {
+    const blob = JSON.stringify(g).toLowerCase();
+    return blob.includes(q);
+  }));
+}
+
+async function load() {
+  $('#container').show();
+  $('#subHeader').text('Loading groups...');
+  try {
+    const res = await fetch('/group/list', { headers: { token } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    const raw = j.data?.Groups || j.data || j.Groups || [];
+    allRows = Array.isArray(raw) ? raw : Object.values(raw);
+    allRows.sort((a, b) => (a.Name || a.name || '').localeCompare(b.Name || b.name || ''));
+    $('#subHeader').text('Source: GET /group/list (per-user)');
+    render(allRows);
+  } catch (e) {
+    $('#subHeader').text('Failed: ' + e.message);
+    $('#container').hide();
+    $('#loginModal').modal('show');
+  }
+}
+
+$(function () {
+  const urlToken = new URLSearchParams(location.search).get('token');
+  if (urlToken) { token = urlToken; load(); }
+  else $('#loginModal').modal({ closable: false }).modal('show');
+
+  $('#loginBtn').click(function () {
+    const t = $('#tokenInput').val().trim();
+    if (!t) return;
+    token = t;
+    $('#loginModal').modal('hide');
+    load();
+  });
+  $('#tokenInput').keypress(e => { if (e.which === 13) $('#loginBtn').click(); });
+  $('#filterInput').on('input', applyFilter);
+  $('#reloadBtn').click(load);
+});
+</script>
+</body>
+</html>
