@@ -80,6 +80,11 @@ var migrations = []Migration{
 		Name:  "history_default_1000",
 		UpSQL: historyDefault1000SQL,
 	},
+	{
+		ID:    11,
+		Name:  "backfill_message_history_timestamp",
+		UpSQL: backfillMessageHistoryTimestampSQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -242,6 +247,30 @@ BEGIN
     UPDATE users SET history = 1000 WHERE history IS NULL OR history = 0;
 END $$;
 -- SQLite version (handled in code)
+`
+
+// Backfills message_history.timestamp from the original WhatsApp event
+// timestamp stored inside datajson->>'Info'->>'Timestamp'. Previous
+// saveMessageToHistory used time.Now() for every row, which collapsed all
+// history-sync messages onto the moment of sync — breaking chronology.
+// Only rows where datajson actually contains a usable timestamp are
+// touched; rows without datajson keep their wallclock as-is.
+const backfillMessageHistoryTimestampSQL = `
+DO $$
+BEGIN
+    UPDATE message_history
+    SET timestamp = ts_value::timestamptz
+    FROM (
+        SELECT id, datajson::jsonb #>> '{Info,Timestamp}' AS ts_value
+        FROM message_history
+        WHERE datajson IS NOT NULL AND datajson <> ''
+    ) src
+    WHERE message_history.id = src.id
+      AND src.ts_value IS NOT NULL
+      AND src.ts_value <> ''
+      AND src.ts_value::timestamptz <> message_history.timestamp;
+END $$;
+-- SQLite version (handled in code, skipped — sqlite has no jsonb ops here)
 `
 
 // GenerateRandomID creates a random string ID
@@ -476,6 +505,14 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 			// SQLite can't ALTER COLUMN DEFAULT; only backfill existing rows.
 			// New rows still get the default from app-level (handlers.go AddUser).
 			_, err = tx.Exec("UPDATE users SET history = 1000 WHERE history IS NULL OR history = 0")
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 11 {
+		if db.DriverName() == "sqlite" {
+			// jsonb #>> not portable to sqlite; skip — only affects rows
+			// inserted with the legacy time.Now() bug on sqlite installs.
+			err = nil
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

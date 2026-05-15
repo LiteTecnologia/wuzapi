@@ -120,14 +120,22 @@ type HistoryMessage struct {
 	DataJson        string    `json:"data_json" db:"datajson"`
 }
 
-func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID, messageType, textContent, mediaLink, quotedMessageID, dataJson string) error {
+// saveMessageToHistory persists a message row. `timestamp` should be the
+// original WhatsApp event timestamp (evt.Info.Timestamp) — not time.Now().
+// Using insert time breaks history sync ordering: every backlog message
+// inserted in a single sync window ends up with the same wallclock and
+// "today's date", hiding the real conversation chronology.
+func (s *server) saveMessageToHistory(userID, chatJID, senderJID, messageID string, timestamp time.Time, messageType, textContent, mediaLink, quotedMessageID, dataJson string) error {
+	if timestamp.IsZero() {
+		timestamp = time.Now()
+	}
 	query := `INSERT INTO message_history (user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link, quoted_message_id, datajson)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 	if s.db.DriverName() == "sqlite" {
 		query = `INSERT INTO message_history (user_id, chat_jid, sender_jid, message_id, timestamp, message_type, text_content, media_link, quoted_message_id, datajson)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	}
-	_, err := s.db.Exec(query, userID, chatJID, senderJID, messageID, time.Now(), messageType, textContent, mediaLink, quotedMessageID, dataJson)
+	_, err := s.db.Exec(query, userID, chatJID, senderJID, messageID, timestamp, messageType, textContent, mediaLink, quotedMessageID, dataJson)
 	if err != nil {
 		return fmt.Errorf("failed to save message to history: %w", err)
 	}
