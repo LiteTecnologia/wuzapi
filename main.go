@@ -281,6 +281,12 @@ func main() {
 			Logger()
 	}
 
+	if InitSentry() {
+		log.Logger = log.Logger.Hook(sentryHook{})
+		defer FlushSentry()
+		log.Info().Msg("Sentry/GlitchTip enabled")
+	}
+
 	// Setup timezone (after logger is configured)
 	tz := os.Getenv("TZ")
 	if tz != "" {
