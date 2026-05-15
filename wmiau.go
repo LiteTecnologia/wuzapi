@@ -978,6 +978,34 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			caption := ""
 			replyToMessageID := ""
 
+			// Unwrap modern WhatsApp envelopes before extracting content. These
+			// wrappers carry the real payload underneath and the extractor below
+			// only knows how to read the inner Conversation/ExtendedTextMessage/
+			// media variants — without unwrapping, ephemeral and view-once
+			// messages reach the extractor with an empty Message and get
+			// silently dropped by the "Skipping empty message from history"
+			// branch further down.
+			msg := evt.Message
+			for i := 0; i < 4; i++ { // bounded depth in case WhatsApp introduces nested wrappers
+				switch {
+				case msg.GetEphemeralMessage() != nil && msg.GetEphemeralMessage().GetMessage() != nil:
+					msg = msg.GetEphemeralMessage().GetMessage()
+				case msg.GetViewOnceMessage() != nil && msg.GetViewOnceMessage().GetMessage() != nil:
+					msg = msg.GetViewOnceMessage().GetMessage()
+				case msg.GetViewOnceMessageV2() != nil && msg.GetViewOnceMessageV2().GetMessage() != nil:
+					msg = msg.GetViewOnceMessageV2().GetMessage()
+				case msg.GetViewOnceMessageV2Extension() != nil && msg.GetViewOnceMessageV2Extension().GetMessage() != nil:
+					msg = msg.GetViewOnceMessageV2Extension().GetMessage()
+				case msg.GetDocumentWithCaptionMessage() != nil && msg.GetDocumentWithCaptionMessage().GetMessage() != nil:
+					msg = msg.GetDocumentWithCaptionMessage().GetMessage()
+				case msg.GetEditedMessage() != nil && msg.GetEditedMessage().GetMessage() != nil:
+					msg = msg.GetEditedMessage().GetMessage()
+				default:
+					i = 4 // exit the loop
+				}
+			}
+			evt.Message = msg
+
 			// Check for delete messages first
 			if protocolMsg := evt.Message.GetProtocolMessage(); protocolMsg != nil && protocolMsg.GetType() == 0 {
 				messageType = "delete"
