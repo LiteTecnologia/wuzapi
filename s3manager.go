@@ -135,9 +135,18 @@ func (m *S3Manager) InitializeS3Client(userID string, config *S3Config) error {
 		cfg.EndpointResolverWithOptions = customResolver
 	}
 
-	// Create S3 client
+	// Create S3 client.
+	//
+	// RequestChecksumCalculation/ResponseChecksumValidation are forced to
+	// `when_required`. The AWS SDK Go v2 default switched to `when_supported`
+	// in early 2025, which makes PutObject emit `x-amz-sdk-checksum-algorithm`
+	// + a CRC32 trailer. GCS S3 XML interop does not accept those headers as
+	// signed input and returns SignatureDoesNotMatch on uploads. The change
+	// is a no-op for AWS S3 and compatible providers (MinIO, R2, B2).
 	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.UsePathStyle = config.PathStyle
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})
 
 	m.clients[userID] = client
