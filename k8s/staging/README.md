@@ -144,6 +144,55 @@ docker push ghcr.io/litetecnologia/wuzapi:staging-$(git rev-parse --short HEAD)
 kubectl -n wuzapi-staging set image deployment/wuzapi wuzapi=ghcr.io/litetecnologia/wuzapi:staging-XXX
 ```
 
+## Media storage — GCS via S3 interop
+
+Bucket de mídia: `gs://nexodin-liteti-wuzapi-staging-media` (region `southamerica-east1`, UBLA, lifecycle delete 30 dias).
+
+Service account: `wuzapi-staging-media@nexodin-liteti.iam.gserviceaccount.com` com `roles/storage.objectAdmin` apenas no bucket. HMAC keys salvas em `pass`:
+- `liteti/services/wuzapi-staging/gcs-hmac-access-id`
+- `liteti/services/wuzapi-staging/gcs-hmac-secret`
+
+Configurar um user pra usar GCS via `POST /session/s3/config`:
+
+```bash
+ACCESS_ID=$(pass show liteti/services/wuzapi-staging/gcs-hmac-access-id)
+SECRET=$(pass show liteti/services/wuzapi-staging/gcs-hmac-secret)
+USER_TOKEN=$(pass show liteti/services/wuzapi-staging/user-caio-token)
+
+curl -s -X POST https://wuzapi-staging.liteti.com.br/session/s3/config \
+  -H "token: $USER_TOKEN" -H "Content-Type: application/json" \
+  -d @- <<EOF
+{
+  "enabled": true,
+  "endpoint": "https://storage.googleapis.com",
+  "region": "auto",
+  "bucket": "nexodin-liteti-wuzapi-staging-media",
+  "access_key": "$ACCESS_ID",
+  "secret_key": "$SECRET",
+  "path_style": true,
+  "public_url": "https://storage.googleapis.com/nexodin-liteti-wuzapi-staging-media",
+  "media_delivery": "s3"
+}
+EOF
+```
+
+Provisão completa do bucket + SA + HMAC keys (one-shot, idempotente):
+
+```bash
+PROJECT=nexodin-liteti
+BUCKET=nexodin-liteti-wuzapi-staging-media
+REGION=southamerica-east1
+SA=wuzapi-staging-media@$PROJECT.iam.gserviceaccount.com
+
+gcloud storage buckets create gs://$BUCKET --project=$PROJECT --location=$REGION --uniform-bucket-level-access
+gcloud iam service-accounts create wuzapi-staging-media --project=$PROJECT
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET --member="serviceAccount:$SA" --role="roles/storage.objectAdmin"
+gcloud storage hmac create $SA --project=$PROJECT --format=json
+# salvar accessId e secret em pass
+```
+
+**Caveat conhecido:** wuzapi usa `DeleteObjects` (batch) em `s3manager.go:405,425` ao executar `DELETE /admin/users/{id}/full`. GCS XML API não suporta batch delete. Cleanup massivo de mídia de um user via API vai falhar — a retenção fica delegada à lifecycle rule do bucket (30 dias, já configurada).
+
 ## Limpar tudo (se precisar reiniciar do zero)
 
 ```bash

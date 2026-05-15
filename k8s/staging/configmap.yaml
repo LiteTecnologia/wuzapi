@@ -27,3 +27,12 @@ data:
 
   # Logging
   WUZAPI_LOG_LEVEL: "info"
+
+  # Event bus (RabbitMQ self-hosted no namespace devtools)
+  # Credenciais via Secret (RABBITMQ_URL); só URL base aqui é redundante,
+  # então o secret tem a URL completa amqp://admin:PASS@host:5672/
+  RABBITMQ_QUEUE: "whatsapp_events"
+  WEBHOOK_ERROR_QUEUE_NAME: "webhook_errors"
+
+  # Observability — Sentry/GlitchTip (SENTRY_DSN injetado via secret quando configurado)
+  SENTRY_ENVIRONMENT: "staging"
