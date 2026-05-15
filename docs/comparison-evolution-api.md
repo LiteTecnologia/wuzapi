@@ -277,7 +277,7 @@ Pra **escalar horizontalmente**, ambos exigem sharding por instance/user na entr
 ### Quando evolution-api ganha objetivamente
 
 1. **Cobertura de features** — Meta Cloud API, catalog, business profile, labels, templates, PTV, mais opções de status, privacy settings. **Se você usa qualquer um desses hoje, migrar pro wuzapi é regredir.**
-2. **Persistência de chats/contacts/messages embutida** — se você consulta histórico via API, wuzapi não cobre. Histórico fica no consumidor.
+2. **Metadata avançada de mensagens** — wuzapi persiste contatos (`whatsmeow_contacts`), chat settings e — se `history>0` — também mensagens em `message_history` com campos minimal (id, type, text, media_link). O que evolution tem que wuzapi não tem: `MessageUpdate` tracking (status de entrega, edits, deletes) e entidade `Chat` agregada nativa (nome do chat, last message, unread count). Se você consulta esses dados específicos hoje, precisa portar ou estender.
 3. **Integrações chatbot embutidas** — 8 plataformas (Chatwoot, Typebot, OpenAI, Dify, n8n, Flowise, evoai, evolutionBot). Wuzapi exige você construir esse adapter por fora.
 4. **Observability stack** — Prometheus `/metrics` nativo, Sentry SDK plugado, Grafana dashboard pronto. Wuzapi tem `/health` mas zero Prometheus.
 5. **Event brokers diversos** — 7 vs 2. Importa se sua arquitetura usa Kafka/NATS/SQS.
