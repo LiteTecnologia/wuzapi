@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/justinas/alice"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 )
@@ -48,6 +49,7 @@ func (s *server) routes() {
 	}
 
 	s.router.Handle("/health", s.GetHealth()).Methods("GET")
+	s.router.Handle("/metrics", promhttp.Handler()).Methods("GET")
 
 	adminRoutes := s.router.PathPrefix("/admin").Subrouter()
 	adminRoutes.Use(s.authadmin)

@@ -337,16 +337,19 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 			req.SetHeader("x-hmac-signature", hmacSignature)
 		}
 
+		callStart := time.Now()
 		resp, postErr := req.Post(myurl)
 
 		lastError = postErr
 
 		if postErr != nil {
+			metricWebhookDeliverySeconds.WithLabelValues("network_error").Observe(time.Since(callStart).Seconds())
 			log.Error().Err(postErr).Int("attempt", attempt+1).Str("url", myurl).Msg("Webhook failed due to network/IO error")
 			continue
 		}
 
 		if resp.StatusCode() < 200 || resp.StatusCode() >= 300 {
+			metricWebhookDeliverySeconds.WithLabelValues("http_error").Observe(time.Since(callStart).Seconds())
 			lastError = fmt.Errorf("unexpected status code: %d. Body: %s", resp.StatusCode(), string(resp.Body()))
 			log.Error().
 				Int("status", resp.StatusCode()).
@@ -360,11 +363,13 @@ func callHookWithHmac(myurl string, payload map[string]string, userID string, en
 			continue
 		}
 
+		metricWebhookDeliverySeconds.WithLabelValues("success").Observe(time.Since(callStart).Seconds())
 		log.Info().Int("status", resp.StatusCode()).Str("url", myurl).Msg("Webhook call successful")
 		return
 	}
 
 	if lastError != nil {
+		metricWebhookFailuresTotal.WithLabelValues("retries_exhausted").Inc()
 		log.Error().Str("url", myurl).Msg("Webhook permanently failed after all retries. Sending to error queue...")
 
 		errorPayloadMap := make(map[string]interface{})

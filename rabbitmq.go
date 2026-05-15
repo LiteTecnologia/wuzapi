@@ -200,8 +200,10 @@ func PublishToRabbit(data []byte, queueOverride ...string) error {
 		},
 	)
 	if err != nil {
+		metricRabbitMQPublishTotal.WithLabelValues(queueName, "error").Inc()
 		log.Error().Err(err).Str("queue", queueName).Msg("Could not publish to RabbitMQ")
 	} else {
+		metricRabbitMQPublishTotal.WithLabelValues(queueName, "success").Inc()
 		log.Debug().Str("queue", queueName).Msg("Published message to RabbitMQ")
 	}
 	return err
