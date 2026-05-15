@@ -12,9 +12,34 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 )
+
+// stripSDKHeadersMiddleware removes aws-sdk-go-v2-specific headers
+// (Amz-Sdk-Invocation-Id, Amz-Sdk-Request, Accept-Encoding) from the
+// request before SigV4 signing. GCS S3-interop's XML API does not
+// recognize these vendor-specific headers and rejects requests that
+// include them in SignedHeaders. Stripping them BEFORE the signer
+// runs keeps the canonical request minimal (host;x-amz-content-sha256;
+// x-amz-date) — matching what aws-cli sends, which GCS accepts.
+//
+// No effect on AWS S3 itself or compatible providers (MinIO/R2/B2)
+// which tolerate the headers in SignedHeaders.
+func addStripSDKHeadersMiddleware(stack *middleware.Stack) error {
+	return stack.Finalize.Insert(middleware.FinalizeMiddlewareFunc("StripSDKHeadersForGCS",
+		func(ctx context.Context, in middleware.FinalizeInput, next middleware.FinalizeHandler) (
+			out middleware.FinalizeOutput, metadata middleware.Metadata, err error) {
+			if req, ok := in.Request.(*smithyhttp.Request); ok {
+				req.Header.Del("Amz-Sdk-Invocation-Id")
+				req.Header.Del("Amz-Sdk-Request")
+				req.Header.Del("Accept-Encoding")
+			}
+			return next.HandleFinalize(ctx, in)
+		}), "Signing", middleware.Before)
+}
 
 // S3Config holds S3 configuration for a user
 type S3Config struct {
@@ -138,6 +163,7 @@ func (m *S3Manager) InitializeS3Client(userID string, config *S3Config) error {
 		o.UsePathStyle = config.PathStyle
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+		o.APIOptions = append(o.APIOptions, addStripSDKHeadersMiddleware)
 	})
 
 	m.clients[userID] = client
