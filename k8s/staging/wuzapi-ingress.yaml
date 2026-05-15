@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wuzapi
+  namespace: wuzapi-staging
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: 50m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: wuzapi-staging.liteti.com.br
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wuzapi
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - wuzapi-staging.liteti.com.br
+      secretName: wuzapi-staging-tls

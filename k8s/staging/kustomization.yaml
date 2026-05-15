@@ -11,6 +11,7 @@ resources:
   # Database/user provisionados manualmente — ver README.md.
   - wuzapi-deployment.yaml
   - wuzapi-service.yaml
+  - wuzapi-ingress.yaml
 
 labels:
   - includeSelectors: false
