@@ -75,6 +75,11 @@ var migrations = []Migration{
 		Name:  "add_whatsmeow_message_secrets_message_id_idx",
 		UpSQL: addWhatsmeowMessageSecretsMessageIDIndexSQL,
 	},
+	{
+		ID:    10,
+		Name:  "history_default_1000",
+		UpSQL: historyDefault1000SQL,
+	},
 }
 
 const changeIDToStringSQL = `
@@ -225,6 +230,16 @@ DO $$
 BEGIN
 	CREATE INDEX IF NOT EXISTS whatsmeow_message_secrets_message_id_idx
 	ON whatsmeow_message_secrets (message_id);
+END $$;
+-- SQLite version (handled in code)
+`
+
+const historyDefault1000SQL = `
+-- PostgreSQL version
+DO $$
+BEGIN
+    ALTER TABLE users ALTER COLUMN history SET DEFAULT 1000;
+    UPDATE users SET history = 1000 WHERE history IS NULL OR history = 0;
 END $$;
 -- SQLite version (handled in code)
 `
@@ -453,6 +468,14 @@ func applyMigration(db *sqlx.DB, migration Migration) error {
 	} else if migration.ID == 9 {
 		if db.DriverName() == "sqlite" {
 			err = nil
+		} else {
+			_, err = tx.Exec(migration.UpSQL)
+		}
+	} else if migration.ID == 10 {
+		if db.DriverName() == "sqlite" {
+			// SQLite can't ALTER COLUMN DEFAULT; only backfill existing rows.
+			// New rows still get the default from app-level (handlers.go AddUser).
+			_, err = tx.Exec("UPDATE users SET history = 1000 WHERE history IS NULL OR history = 0")
 		} else {
 			_, err = tx.Exec(migration.UpSQL)
 		}

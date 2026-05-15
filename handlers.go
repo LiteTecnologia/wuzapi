@@ -5190,6 +5190,9 @@ func (s *server) AddUser() http.HandlerFunc {
 		if user.Webhook == "" {
 			user.Webhook = ""
 		}
+		if user.History == 0 {
+			user.History = 1000
+		}
 
 		// Encrypt HMAC key if provided
 		var encryptedHmacKey []byte
