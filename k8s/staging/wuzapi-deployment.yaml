@@ -72,7 +72,9 @@ spec:
               memory: 256Mi
             limits:
               cpu: 1000m
-              memory: 1Gi
+              # 1Gi era estourado por picos de sessão/mídia → OOMKilled (memcg) recorrente.
+              # 2Gi dá folga para os picos; baseline ocioso ~90Mi.
+              memory: 2Gi
           readinessProbe:
             httpGet:
               path: /health
